@@ -143,6 +143,16 @@ typedef struct
 
 } calibration_t;
 
+typedef struct
+{
+  vector_t accel;
+  vector_t gyro;
+  vector_t magneto;
+  float yaw;
+  float pitch;
+  float roll;
+} imu_data_t;
+
 esp_err_t i2c_mpu9250_init(calibration_t *cal);
 esp_err_t set_clock_source(uint8_t adrs);
 esp_err_t set_full_scale_gyro_range(uint8_t adrs);

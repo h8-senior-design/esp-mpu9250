@@ -37,7 +37,8 @@ static calibration_t cal = {
     .accel_offset = {.x = 0.0, .y = 0.0, .z = 0.0},
     .accel_scale_lo = {.x = -1.0, .y = -1.0, .z = -1.0},
     .accel_scale_hi = {.x = 1.0, .y = 1.0, .z = 1.0},
-    .gyro_bias_offset = {.x = 0.0, .y = 0.0, .z = 0.0}};
+    .gyro_bias_offset = {.x = 0.0, .y = 0.0, .z = 0.0}
+};
 
 void wait(void)
 {
@@ -101,7 +102,7 @@ void calibrate_gyro(void)
     if (i % 100 == 0)
       esp_task_wdt_reset();
 
-    pause();
+    mpu_pause();
   }
 
   vg_sum.x /= -NUM_GYRO_READS;
@@ -295,7 +296,7 @@ void calibrate_mag(void)
     v_max.y = MAX(v_max.y, vm.y);
     v_max.z = MAX(v_max.z, vm.z);
 
-    printf(" %0.3f    %0.3f    %0.3f    %0.3f   %0.3f   %0.3f   %0.3f   %0.3f   %0.3f       \r", vm.x, vm.y, vm.z, v_min.x, v_min.y, v_min.z, v_max.x, v_max.y, v_max.z);
+    printf(" %0.3f    %0.3f    %0.3f    %0.3f   %0.3f   %0.3f   %0.3f   %0.3f   %0.3f       \n", vm.x, vm.y, vm.z, v_min.x, v_min.y, v_min.z, v_max.x, v_max.y, v_max.z);
 
     vTaskDelay(10 / portTICK_RATE_MS);
   }
@@ -304,7 +305,7 @@ void calibrate_mag(void)
       .x = (v_max.x - v_min.x) / 2.0,
       .y = (v_max.y - v_min.y) / 2.0,
       .z = (v_max.z - v_min.z) / 2.0};
-  float avg_radius = (v_avg.x + v_avg.y + v_avg.z) / 2.0;
+  float avg_radius = (v_avg.x + v_avg.y + v_avg.z) / 3.0;
   vector_t v_scale = {
       .x = avg_radius / v_avg.x,
       .y = avg_radius / v_avg.y,
