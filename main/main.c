@@ -32,6 +32,8 @@
 #include "esp_wifi_default.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
+#include "lwip/err.h"
+#include "lwip/sockets.h"
 
 #include "esp_http_client.h"
 
@@ -44,6 +46,8 @@
 #include "../components/wifi/station.h"
 
 static const char *TAG = "main";
+static const char *host_ip = "192.168.0.2";
+static const unsigned short port = 3000;
 
 #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
 
@@ -106,7 +110,29 @@ void run_imu(void)
   i2c_mpu9250_init(&cal);
   MadgwickAHRSinit(SAMPLE_FREQ_Hz, 0.8);
 
+  // setup tcp socket
+  struct sockaddr_in dest_addr;
+  dest_addr.sin_addr.s_addr = inet_addr(host_ip);
+  dest_addr.sin_family = AF_INET;
+  dest_addr.sin_port = htons(port);
+
+  int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (sock < 0) {
+      ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+      return;
+  }
+  ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
+
+  int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
+  if (err != 0) {
+      ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+      return;
+  }
+  ESP_LOGI(TAG, "Successfully connected. Size of struct is %d bytes", sizeof(imu_data_t));
+
+
   uint64_t i = 0;
+  uint64_t last_time = 0;
   while (true)
   {
     // Get the Accelerometer, Gyroscope and Magnetometer values.
@@ -123,22 +149,44 @@ void run_imu(void)
                        data.magneto.x, data.magneto.y, data.magneto.z);
 
     // Print the data out every 10 items
-    if (i++ % 10 == 0)
+    if (i++ % 2 == 0)
     {
 
       MadgwickGetEulerAnglesDegrees(&data.yaw, &data.pitch, &data.roll);
       ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", data.yaw, data.pitch, data.roll);
-      ESP_LOGI(TAG, "stack left: %d", uxTaskGetStackHighWaterMark(NULL));
 
-      esp_http_client_config_t config = {
-        .url = "http://192.168.0.2:3000/log",
-        .method = HTTP_METHOD_POST,
-      };
-      esp_http_client_handle_t client = esp_http_client_init(&config);
-      esp_http_client_set_header(client, "Content-Type", "application/octet-stream");
-      esp_http_client_set_post_field(client, (const char *) &data, sizeof(data));
-      esp_http_client_perform(client);
-      esp_http_client_cleanup(client);
+      struct timeval tv_now;
+      gettimeofday(&tv_now, NULL);
+      data.time = (uint64_t)tv_now.tv_sec * 1000000L + (uint64_t)tv_now.tv_usec;
+      
+      ESP_LOGI(TAG, "time diff ms: %f", (data.time - last_time) / 1000.0);
+      last_time = data.time;
+
+      int err = send(sock, (char *) &data, sizeof(data), 0);
+      if (err < 0) {
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+
+        // try to reconnect if connection reset
+        if (errno == 104 || errno == 128) {
+          ESP_LOGI(TAG, "Trying to reconnect to socket");
+
+          // try until reconnected
+          err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
+          while(err) {
+            ESP_LOGE(TAG, "Socket unable to connect: errno %d", err);
+          }
+        }
+      }
+
+      // esp_http_client_config_t config = {
+      //   .url = "http://192.168.0.2:3000/log",
+      //   .method = HTTP_METHOD_POST,
+      // };
+      // esp_http_client_handle_t client = esp_http_client_init(&config);
+      // esp_http_client_set_header(client, "Content-Type", "application/octet-stream");
+      // esp_http_client_set_post_field(client, (const char *) &data, sizeof(data));
+      // esp_http_client_perform(client);
+      // esp_http_client_cleanup(client);
 
       // Make the WDT happy
       esp_task_wdt_reset();

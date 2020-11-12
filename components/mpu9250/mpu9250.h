@@ -151,6 +151,7 @@ typedef struct
   float yaw;
   float pitch;
   float roll;
+  int64_t time;
 } imu_data_t;
 
 esp_err_t i2c_mpu9250_init(calibration_t *cal);
