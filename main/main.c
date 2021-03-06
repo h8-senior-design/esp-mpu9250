@@ -131,6 +131,7 @@ void run_imu(void)
   ESP_LOGI(TAG, "Successfully connected. Size of struct is %d bytes", sizeof(imu_data_t));
 
 
+  data.verify = 0xDEADBEEF;
   uint64_t i = 0;
   uint64_t last_time = 0;
   while (true)
@@ -148,19 +149,16 @@ void run_imu(void)
                        data.accel.x, data.accel.y, data.accel.z,
                        data.magneto.x, data.magneto.y, data.magneto.z);
 
+    struct timeval tv_now;
+    gettimeofday(&tv_now, NULL);
+    data.time = (uint64_t)tv_now.tv_sec * 1000000L + (uint64_t)tv_now.tv_usec;
+
     // Print the data out every 10 items
-    if (i++ % 2 == 0)
+    if (i++ % 10 == 0)
     {
-
       MadgwickGetEulerAnglesDegrees(&data.yaw, &data.pitch, &data.roll);
-      ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", data.yaw, data.pitch, data.roll);
-
-      struct timeval tv_now;
-      gettimeofday(&tv_now, NULL);
-      data.time = (uint64_t)tv_now.tv_sec * 1000000L + (uint64_t)tv_now.tv_usec;
-      
       ESP_LOGI(TAG, "time diff ms: %f", (data.time - last_time) / 1000.0);
-      last_time = data.time;
+      ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", data.yaw, data.pitch, data.roll);
 
       int err = send(sock, (char *) &data, sizeof(data), 0);
       if (err < 0) {
@@ -173,25 +171,24 @@ void run_imu(void)
           // try until reconnected
           err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
           while(err) {
-            ESP_LOGE(TAG, "Socket unable to connect: errno %d", err);
+            close(sock);
+            sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+            while (sock < 0) {
+              close(sock);
+              ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+              sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+            }
+            ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+            err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
           }
         }
       }
-
-      // esp_http_client_config_t config = {
-      //   .url = "http://192.168.0.2:3000/log",
-      //   .method = HTTP_METHOD_POST,
-      // };
-      // esp_http_client_handle_t client = esp_http_client_init(&config);
-      // esp_http_client_set_header(client, "Content-Type", "application/octet-stream");
-      // esp_http_client_set_post_field(client, (const char *) &data, sizeof(data));
-      // esp_http_client_perform(client);
-      // esp_http_client_cleanup(client);
 
       // Make the WDT happy
       esp_task_wdt_reset();
     }
 
+    last_time = data.time;
     mpu_pause();
   }
 }

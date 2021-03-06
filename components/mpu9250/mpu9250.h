@@ -152,7 +152,8 @@ typedef struct
   float pitch;
   float roll;
   int64_t time;
-} imu_data_t;
+  uint32_t verify;
+} __attribute__ ((packed)) imu_data_t;
 
 esp_err_t i2c_mpu9250_init(calibration_t *cal);
 esp_err_t set_clock_source(uint8_t adrs);
