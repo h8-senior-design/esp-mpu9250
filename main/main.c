@@ -46,7 +46,7 @@
 #include "../components/wifi/station.h"
 
 static const char *TAG = "main";
-static const char *host_ip = "192.168.0.2";
+static const char *host_ip = "10.145.234.53";
 static const unsigned short port = 3000;
 
 #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
@@ -70,6 +70,9 @@ calibration_t cal = {
 };
 
 imu_data_t data;
+
+imu_data_buffer_t *data_buffer;
+int data_buffer_size = 0;
 
 /**
  * Transformation:
@@ -107,8 +110,14 @@ static void transform_mag(vector_t *v)
 
 void run_imu(void)
 {
+  ESP_LOGI(TAG, "heap space: %d", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+  ESP_LOGI(TAG, "imu data struct space: %d", sizeof(imu_data_t));
+  data_buffer = heap_caps_malloc(sizeof(imu_data_buffer_t), MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
+  data_buffer->start_code = 0x00000000;
+  data_buffer->end_code = 0xFFFFFFFF;
+
   i2c_mpu9250_init(&cal);
-  MadgwickAHRSinit(SAMPLE_FREQ_Hz, 0.8);
+  MadgwickAHRS_init(SAMPLE_FREQ_Hz, 0.8);
 
   // setup tcp socket
   struct sockaddr_in dest_addr;
@@ -130,8 +139,6 @@ void run_imu(void)
   }
   ESP_LOGI(TAG, "Successfully connected. Size of struct is %d bytes", sizeof(imu_data_t));
 
-
-  data.verify = 0xDEADBEEF;
   uint64_t i = 0;
   uint64_t last_time = 0;
   while (true)
@@ -145,7 +152,7 @@ void run_imu(void)
     transform_mag(&data.magneto);
 
     // Apply the AHRS algorithm
-    MadgwickAHRSupdate(DEG2RAD(data.gyro.x), DEG2RAD(data.gyro.y), DEG2RAD(data.gyro.z),
+    MadgwickAHRS_update(DEG2RAD(data.gyro.x), DEG2RAD(data.gyro.y), DEG2RAD(data.gyro.z),
                        data.accel.x, data.accel.y, data.accel.z,
                        data.magneto.x, data.magneto.y, data.magneto.z);
 
@@ -156,30 +163,37 @@ void run_imu(void)
     // Print the data out every 10 items
     if (i++ % 10 == 0)
     {
-      MadgwickGetEulerAnglesDegrees(&data.yaw, &data.pitch, &data.roll);
+      Madgwick_get_euler_angles_degrees(&data.yaw, &data.pitch, &data.roll);
       ESP_LOGI(TAG, "time diff ms: %f", (data.time - last_time) / 1000.0);
       ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", data.yaw, data.pitch, data.roll);
 
-      int err = send(sock, (char *) &data, sizeof(data), 0);
-      if (err < 0) {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+      // add imu data to buffer
+      data_buffer->data[data_buffer_size++] = data;
 
-        // try to reconnect if connection reset
-        if (errno == 104 || errno == 128) {
-          ESP_LOGI(TAG, "Trying to reconnect to socket");
+      // once buffer is full, send data
+      if (data_buffer_size == IMU_DATA_BUFFER_SIZE) {
+        data_buffer_size = 0;
+        int err = send(sock, (char *) data_buffer, sizeof(imu_data_buffer_t), 0);
+        if (err < 0) {
+          ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
 
-          // try until reconnected
-          err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-          while(err) {
-            close(sock);
-            sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-            while (sock < 0) {
-              close(sock);
-              ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-              sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-            }
-            ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+          // try to reconnect if connection reset
+          if (errno == 104 || errno == 128) {
+            ESP_LOGI(TAG, "Trying to reconnect to socket");
+
+            // try until reconnected
             err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
+            while(err) {
+              close(sock);
+              sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+              while (sock < 0) {
+                close(sock);
+                ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+                sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+              }
+              ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+              err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
+            }
           }
         }
       }

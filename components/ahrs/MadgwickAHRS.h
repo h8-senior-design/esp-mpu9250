@@ -16,10 +16,10 @@
 //---------------------------------------------------------------------------------------------------
 // Function declarations
 
-void MadgwickAHRSinit(float sampleFreqDef, float betaDef);
-void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
-void MadgwickAHRSupdateIMU(float gx, float gy, float gz, float ax, float ay, float az);
-void MadgwickGetEulerAnglesDegrees(float *heading, float *pitch, float *roll);
+void MadgwickAHRS_init(float sampleFreqDef, float betaDef);
+void MadgwickAHRS_update(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
+void MadgwickAHRS_update_IMU(float gx, float gy, float gz, float ax, float ay, float az);
+void Madgwick_get_euler_angles_degrees(float *heading, float *pitch, float *roll);
 
 #endif
 //=====================================================================================================

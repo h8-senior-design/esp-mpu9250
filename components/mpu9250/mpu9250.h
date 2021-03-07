@@ -122,6 +122,8 @@
 #define BYTE_2_INT_BE(byte, i) ((int16_t)((byte[i] << 8) + (byte[i + 1])))
 #define BYTE_2_INT_LE(byte, i) ((int16_t)((byte[i + 1] << 8) + (byte[i])))
 
+#define IMU_DATA_BUFFER_SIZE 50
+
 typedef struct
 {
   float x, y, z;
@@ -145,15 +147,28 @@ typedef struct
 
 typedef struct
 {
+  // 0
   vector_t accel;
+  // 12
   vector_t gyro;
+  // 24
   vector_t magneto;
+  // 36
   float yaw;
+  // 40
   float pitch;
+  // 44
   float roll;
+  // 48
   int64_t time;
-  uint32_t verify;
 } __attribute__ ((packed)) imu_data_t;
+
+typedef struct
+{
+  uint32_t start_code;
+  imu_data_t data[IMU_DATA_BUFFER_SIZE];
+  uint32_t end_code;
+} __attribute__ ((packed)) imu_data_buffer_t;
 
 esp_err_t i2c_mpu9250_init(calibration_t *cal);
 esp_err_t set_clock_source(uint8_t adrs);

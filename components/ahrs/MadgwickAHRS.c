@@ -33,7 +33,7 @@ float invSqrt(float x);
 //====================================================================================================
 // Functions
 
-void MadgwickAHRSinit(float sampleFreqDef, float betaDef)
+void MadgwickAHRS_init(float sampleFreqDef, float betaDef)
 {
   sampleFreq = sampleFreqDef;
   beta = betaDef;
@@ -42,7 +42,7 @@ void MadgwickAHRSinit(float sampleFreqDef, float betaDef)
 //---------------------------------------------------------------------------------------------------
 // AHRS algorithm update
 
-void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz)
+void MadgwickAHRS_update(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz)
 {
   float recipNorm;
   float s0, s1, s2, s3;
@@ -53,7 +53,7 @@ void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float 
   // Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
   if ((mx == 0.0f) && (my == 0.0f) && (mz == 0.0f))
   {
-    MadgwickAHRSupdateIMU(gx, gy, gz, ax, ay, az);
+    MadgwickAHRS_update_IMU(gx, gy, gz, ax, ay, az);
     return;
   }
 
@@ -144,7 +144,7 @@ void MadgwickAHRSupdate(float gx, float gy, float gz, float ax, float ay, float 
 //---------------------------------------------------------------------------------------------------
 // IMU algorithm update
 
-void MadgwickAHRSupdateIMU(float gx, float gy, float gz, float ax, float ay, float az)
+void MadgwickAHRS_update_IMU(float gx, float gy, float gz, float ax, float ay, float az)
 {
   float recipNorm;
   float s0, s1, s2, s3;
@@ -234,7 +234,7 @@ float invSqrt(float x)
  * in the following link: http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/index.htm
  * @return {object} Normalised vector - {x, y, z, angle}
  */
-void MadgwickGetVector(float *angle, float *x, float *y, float *z)
+void Madgwick_get_vector(float *angle, float *x, float *y, float *z)
 {
   float ang = 2.0 * acos(q0);
   float sin_angle = sin(ang / 2.0);
@@ -266,7 +266,7 @@ float norm_angle_0_2pi(float a)
  *   https://github.com/PenguPilot/PenguPilot/blob/master/autopilot/service/util/math/quat.c#L103
  * @return {object} {heading, pitch, roll} in radians
  */
-void MadgwickGetEulerAngles(float *heading, float *pitch, float *roll)
+void Madgwick_get_euler_angles(float *heading, float *pitch, float *roll)
 {
   float ww = q0 * q0;
   float xx = q1 * q1;
@@ -290,9 +290,9 @@ void MadgwickGetEulerAngles(float *heading, float *pitch, float *roll)
  * @return {object} {heading, pitch, roll} in radians
  */
 #define RAD_2_DEG (180.0f / M_PI)
-void MadgwickGetEulerAnglesDegrees(float *heading, float *pitch, float *roll)
+void Madgwick_get_euler_angles_degrees(float *heading, float *pitch, float *roll)
 {
-  MadgwickGetEulerAngles(heading, pitch, roll);
+  Madgwick_get_euler_angles(heading, pitch, roll);
 
   *heading *= RAD_2_DEG;
   *pitch *= RAD_2_DEG;
