@@ -35,8 +35,6 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 
-#include "esp_http_client.h"
-
 #include "driver/i2c.h"
 
 #include "../components/ahrs/MadgwickAHRS.h"
@@ -44,6 +42,8 @@
 #include "../components/mpu9250/calibrate.h"
 #include "../components/mpu9250/common.h"
 #include "../components/wifi/station.h"
+#include "../components/ble/ble.h"
+#include "../components/ble/ble_databee.h"
 
 static const char *TAG = "main";
 static const char *host_ip = "10.145.234.53";
@@ -120,24 +120,24 @@ void run_imu(void)
   MadgwickAHRS_init(SAMPLE_FREQ_Hz, 0.8);
 
   // setup tcp socket
-  struct sockaddr_in dest_addr;
-  dest_addr.sin_addr.s_addr = inet_addr(host_ip);
-  dest_addr.sin_family = AF_INET;
-  dest_addr.sin_port = htons(port);
+  // struct sockaddr_in dest_addr;
+  // dest_addr.sin_addr.s_addr = inet_addr(host_ip);
+  // dest_addr.sin_family = AF_INET;
+  // dest_addr.sin_port = htons(port);
 
-  int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  if (sock < 0) {
-      ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-      return;
-  }
-  ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
+  // int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  // if (sock < 0) {
+  //     ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+  //     return;
+  // }
+  // ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
 
-  int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-  if (err != 0) {
-      ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-      return;
-  }
-  ESP_LOGI(TAG, "Successfully connected. Size of struct is %d bytes", sizeof(imu_data_t));
+  // int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
+  // if (err != 0) {
+  //     ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
+  //     return;
+  // }
+  // ESP_LOGI(TAG, "Successfully connected. Size of struct is %d bytes", sizeof(imu_data_t));
 
   uint64_t i = 0;
   uint64_t last_time = 0;
@@ -235,7 +235,8 @@ void app_main(void)
   }
   ESP_ERROR_CHECK(ret);
 
-  wifi_init_sta();
+  ble_init_nimble();
+  // wifi_init_sta();
   //start i2c task
   xTaskCreate(imu_task, "imu_task", 4096, NULL, 10, NULL);
 }
