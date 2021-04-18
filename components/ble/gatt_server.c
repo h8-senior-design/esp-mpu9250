@@ -41,9 +41,9 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     {
         /* Service: Data */
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
-        .uuid = BLE_UUID16_DECLARE(GATT_DATABEE_UUID),
+        .uuid = &GATT_DATABEE_UUID.u,
         .characteristics = (struct ble_gatt_chr_def[])
-        { 
+        {
             {
                 /* Characteristic: Data */
                 .uuid = &GATT_DATABEE_DATA_UUID.u,

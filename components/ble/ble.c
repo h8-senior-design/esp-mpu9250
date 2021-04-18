@@ -1,6 +1,8 @@
 #include "gatt_server.h"
 #include "ble_databee.h"
 
+#include "esp_log.h"
+
 #include "esp_nimble_hci.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -44,6 +46,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnect; reason=%d\n", event->disconnect.reason);
 
+        ESP_LOGI(TAG, "suspending imu task");
         vTaskSuspend(imu_task_handle);
         /* Connection terminated; resume advertising */
         ble_advertise();
@@ -60,10 +63,13 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
                     event->subscribe.cur_notify, databee_data_attr_handle);
         if (event->subscribe.attr_handle == databee_data_attr_handle) {
             notify_state = event->subscribe.cur_notify;
-            vTaskResume(imu_task_handle);
-        } else if (event->subscribe.attr_handle != databee_data_attr_handle) {
-            notify_state = event->subscribe.cur_notify;
-            vTaskSuspend(imu_task_handle);
+            if (notify_state) {
+              ESP_LOGI(TAG, "resuming imu task");
+              vTaskResume(imu_task_handle);
+            } else {
+              ESP_LOGI(TAG, "suspending imu task");
+              vTaskSuspend(imu_task_handle);
+            }
         }
         ESP_LOGI("BLE_GAP_SUBSCRIBE_EVENT", "conn_handle from subscribe=%d", databee_conn_handle);
         break;
@@ -101,6 +107,10 @@ static void ble_advertise(void) {
   */
   fields.flags = BLE_HS_ADV_F_DISC_GEN |
                   BLE_HS_ADV_F_BREDR_UNSUP;
+
+  // Advertise service uuid
+  fields.uuids16 = &GATT_DATABEE_UUID;
+  fields.num_uuids16 = 1;
 
   /*
   * Indicate that the TX power level field should be included; have the
@@ -154,6 +164,7 @@ void ble_init_nimble(void) {
   ESP_ERROR_CHECK(gatt_server_init());
 
   ESP_ERROR_CHECK(ble_svc_gap_device_name_set(device_name));
+  esp_log_level_set("NimBLE", ESP_LOG_NONE);
   // initialize the nimble host configuration
   nimble_port_freertos_init(ble_host_task);
 }

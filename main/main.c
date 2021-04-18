@@ -129,8 +129,8 @@ void run_imu(void) {
     // Print the data out every 10 items
     if (i++ % 10 == 0) {
       Madgwick_get_euler_angles_degrees(&imu_data.yaw, &imu_data.pitch, &imu_data.roll);
-      ESP_LOGI(TAG, "time diff ms: %f", (imu_data.time - last_time) / 1000.0);
-      ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", imu_data.yaw, imu_data.pitch, imu_data.roll);
+      ESP_LOGD(TAG, "time diff ms: %f", (imu_data.time - last_time) / 1000.0);
+      ESP_LOGD(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", imu_data.yaw, imu_data.pitch, imu_data.roll);
 
       // update characteristic value
       update_data_characteristic(imu_data);
