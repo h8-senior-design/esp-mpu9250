@@ -45,6 +45,8 @@
 
 static const char *TAG = "main";
 
+TaskHandle_t imu_task_handle;
+
 #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
 
 // calibration_t cal = {
@@ -74,8 +76,7 @@ imu_data_t imu_data;
  * @param  {object} s {x,y,z} sensor
  * @return {object}   {x,y,z} transformed
  */
-static void transform_accel_gyro(vector_t *v)
-{
+static void transform_accel_gyro(vector_t *v) {
   float x = v->x;
   float y = v->y;
   float z = v->z;
@@ -90,8 +91,7 @@ static void transform_accel_gyro(vector_t *v)
  * @param  {object} s {x,y,z} sensor
  * @return {object}   {x,y,z} transformed
  */
-static void transform_mag(vector_t *v)
-{
+static void transform_mag(vector_t *v) {
   float x = v->x;
   float y = v->y;
   float z = v->z;
@@ -101,16 +101,14 @@ static void transform_mag(vector_t *v)
   v->z = -x;
 }
 
-void run_imu(void)
-{
+void run_imu(void) {
 
   i2c_mpu9250_init(&cal);
   MadgwickAHRS_init(SAMPLE_FREQ_Hz, 0.8);
 
   uint64_t i = 0;
   uint64_t last_time = 0;
-  while (true)
-  {
+  while (true) {
     // Get the Accelerometer, Gyroscope and Magnetometer values.
     ESP_ERROR_CHECK(get_accel_gyro_mag(&imu_data.accel, &imu_data.gyro, &imu_data.magneto));
 
@@ -129,8 +127,7 @@ void run_imu(void)
     imu_data.time = (uint64_t)tv_now.tv_sec * 1000000L + (uint64_t)tv_now.tv_usec;
 
     // Print the data out every 10 items
-    if (i++ % 10 == 0)
-    {
+    if (i++ % 10 == 0) {
       Madgwick_get_euler_angles_degrees(&imu_data.yaw, &imu_data.pitch, &imu_data.roll);
       ESP_LOGI(TAG, "time diff ms: %f", (imu_data.time - last_time) / 1000.0);
       ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", imu_data.yaw, imu_data.pitch, imu_data.roll);
@@ -147,8 +144,9 @@ void run_imu(void)
   }
 }
 
-static void imu_task(void *arg)
-{
+static void imu_task(void *arg) {
+  // wait for ble to subscribe to characteristic
+  vTaskSuspend(NULL);
 
 #ifdef CONFIG_CALIBRATION_MODE
   calibrate_gyro();
@@ -158,16 +156,15 @@ static void imu_task(void *arg)
   run_imu();
 #endif
 
-  // Exit
+  // exit
   vTaskDelay(100 / portTICK_RATE_MS);
   i2c_driver_delete(I2C_MASTER_NUM);
 
   vTaskDelete(NULL);
 }
 
-void app_main(void)
-{
-  //Initialize NVS
+void app_main(void) {
+  // initialize nvs
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
   {
@@ -176,7 +173,9 @@ void app_main(void)
   }
   ESP_ERROR_CHECK(ret);
 
+  // initialize nimble BLE stack
   ble_init_nimble();
-  //start i2c task
-  xTaskCreate(imu_task, "imu_task", 4096, NULL, 10, NULL);
+
+  // start imu task
+  xTaskCreate(imu_task, "imu_task", 4096, NULL, 10, &imu_task_handle);
 }

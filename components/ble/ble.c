@@ -11,6 +11,7 @@
 
 uint16_t databee_conn_handle;
 static uint8_t ble_addr_type;
+static bool notify_state;
 
 static const char *TAG = "ble";
 static const char *device_name = "databee";
@@ -43,6 +44,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnect; reason=%d\n", event->disconnect.reason);
 
+        vTaskSuspend(imu_task_handle);
         /* Connection terminated; resume advertising */
         ble_advertise();
         break;
@@ -56,13 +58,13 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
         ESP_LOGI(TAG, "subscribe event; cur_notify=%d\n value handle; "
                     "val_handle=%d\n",
                     event->subscribe.cur_notify, databee_data_attr_handle);
-        // if (event->subscribe.attr_handle == hrs_hrm_handle) {
-        //     notify_state = event->subscribe.cur_notify;
-        //     blehr_tx_hrate_reset();
-        // } else if (event->subscribe.attr_handle != hrs_hrm_handle) {
-        //     notify_state = event->subscribe.cur_notify;
-        //     blehr_tx_hrate_stop();
-        // }
+        if (event->subscribe.attr_handle == databee_data_attr_handle) {
+            notify_state = event->subscribe.cur_notify;
+            vTaskResume(imu_task_handle);
+        } else if (event->subscribe.attr_handle != databee_data_attr_handle) {
+            notify_state = event->subscribe.cur_notify;
+            vTaskSuspend(imu_task_handle);
+        }
         ESP_LOGI("BLE_GAP_SUBSCRIBE_EVENT", "conn_handle from subscribe=%d", databee_conn_handle);
         break;
 

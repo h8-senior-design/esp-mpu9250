@@ -21,6 +21,7 @@ static const ble_uuid128_t GATT_DATABEE_DATA_UUID = BLE_UUID128_INIT(0xa3, 0x41,
 extern uint16_t databee_data_attr_handle;
 extern uint16_t databee_conn_handle;
 extern imu_data_t imu_data;
+extern TaskHandle_t imu_task_handle;
 
 struct ble_hs_cfg;
 struct ble_gatt_register_ctxt;
