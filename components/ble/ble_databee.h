@@ -18,14 +18,12 @@ static const ble_uuid128_t GATT_DATABEE_DATA_UUID = BLE_UUID128_INIT(0xa3, 0x41,
 #define GATT_MANUFACTURER_NAME_UUID             0x2A29
 #define GATT_MODEL_NUMBER_UUID                  0x2A24
 
-extern uint16_t databee_data_handle;
-extern imu_data_buffer_t *data_buffer;
+extern uint16_t databee_data_attr_handle;
+extern uint16_t databee_conn_handle;
+extern imu_data_t imu_data;
 
 struct ble_hs_cfg;
 struct ble_gatt_register_ctxt;
-
-void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
-int gatt_svr_init(void);
 
 #ifdef __cplusplus
 }

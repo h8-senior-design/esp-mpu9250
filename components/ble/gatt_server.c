@@ -11,12 +11,12 @@ static const char *TAG = "ble gatt server";
 static const char *manuf_name = "ESP32 NimBLE";
 static const char *model_num = "NimBLE Databee";
 
-uint16_t databee_data_handle;
+uint16_t databee_data_attr_handle;
 
 static int gatt_svr_chr_access_data(uint16_t conn_handle, uint16_t attr_handle,
                                struct ble_gatt_access_ctxt *ctxt, void *arg) {
     if (ble_uuid_cmp(ctxt->chr->uuid, &GATT_DATABEE_DATA_UUID.u)) {
-        return os_mbuf_append(ctxt->om, data_buffer, sizeof(imu_data_buffer_t)) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        return os_mbuf_append(ctxt->om, &imu_data, sizeof(imu_data_t)) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }
 
     return BLE_ATT_ERR_UNLIKELY;
@@ -43,11 +43,12 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = BLE_UUID16_DECLARE(GATT_DATABEE_UUID),
         .characteristics = (struct ble_gatt_chr_def[])
-        { {
+        { 
+            {
                 /* Characteristic: Data */
                 .uuid = &GATT_DATABEE_DATA_UUID.u,
                 .access_cb = gatt_svr_chr_access_data,
-                .val_handle = &databee_data_handle,
+                .val_handle = &databee_data_attr_handle,
                 .flags = BLE_GATT_CHR_F_NOTIFY,
             }, {
                 0, /* No more characteristics in this service */
@@ -110,9 +111,14 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg) {
 }
 
 int gatt_server_init(void) {
-  ble_svc_gap_init();
-  ble_svc_gatt_init();
-  ESP_ERROR_CHECK(ble_gatts_count_cfg(gatt_svr_svcs));
-  ESP_ERROR_CHECK(ble_gatts_add_svcs(gatt_svr_svcs));
-  return 0;
+    ble_svc_gap_init();
+    ble_svc_gatt_init();
+    ESP_ERROR_CHECK(ble_gatts_count_cfg(gatt_svr_svcs));
+    ESP_ERROR_CHECK(ble_gatts_add_svcs(gatt_svr_svcs));
+    return 0;
+}
+
+void update_data_characteristic(imu_data_t new_data) {
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(&new_data, sizeof(imu_data_t));
+    ESP_ERROR_CHECK(ble_gattc_notify_custom(databee_conn_handle, databee_data_attr_handle, om));
 }

@@ -62,11 +62,11 @@ esp_err_t i2c_mpu9250_init(calibration_t *c)
   vTaskDelay(10 / portTICK_RATE_MS);
 
   // define gyro range
-  ESP_ERROR_CHECK(set_full_scale_gyro_range(MPU9250_GYRO_FS_250));
+  ESP_ERROR_CHECK(set_full_scale_gyro_range(MPU9250_GYRO_FS_2000));
   vTaskDelay(10 / portTICK_RATE_MS);
 
   // define accel range
-  ESP_ERROR_CHECK(set_full_scale_accel_range(MPU9250_ACCEL_FS_4));
+  ESP_ERROR_CHECK(set_full_scale_accel_range(MPU9250_ACCEL_FS_16));
   vTaskDelay(10 / portTICK_RATE_MS);
 
   // disable sleepEnabled

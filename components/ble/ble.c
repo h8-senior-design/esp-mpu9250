@@ -9,8 +9,8 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 
+uint16_t databee_conn_handle;
 static uint8_t ble_addr_type;
-static uint16_t conn_handle;
 
 static const char *TAG = "ble";
 static const char *device_name = "databee";
@@ -36,8 +36,8 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
             break;
         }
 
-        conn_handle = event->connect.conn_handle;
-        ble_gattc_exchange_mtu(conn_handle, NULL, NULL);
+        databee_conn_handle = event->connect.conn_handle;
+        ble_gattc_exchange_mtu(databee_conn_handle, NULL, NULL);
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
@@ -55,7 +55,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
     case BLE_GAP_EVENT_SUBSCRIBE:
         ESP_LOGI(TAG, "subscribe event; cur_notify=%d\n value handle; "
                     "val_handle=%d\n",
-                    event->subscribe.cur_notify, databee_data_handle);
+                    event->subscribe.cur_notify, databee_data_attr_handle);
         // if (event->subscribe.attr_handle == hrs_hrm_handle) {
         //     notify_state = event->subscribe.cur_notify;
         //     blehr_tx_hrate_reset();
@@ -63,7 +63,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
         //     notify_state = event->subscribe.cur_notify;
         //     blehr_tx_hrate_stop();
         // }
-        ESP_LOGI("BLE_GAP_SUBSCRIBE_EVENT", "conn_handle from subscribe=%d", conn_handle);
+        ESP_LOGI("BLE_GAP_SUBSCRIBE_EVENT", "conn_handle from subscribe=%d", databee_conn_handle);
         break;
 
     case BLE_GAP_EVENT_MTU:

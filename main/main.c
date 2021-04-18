@@ -28,26 +28,22 @@
 #include "esp_system.h"
 #include "esp_err.h"
 #include "esp_task_wdt.h"
-#include "esp_wifi.h"
-#include "esp_wifi_default.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
-#include "lwip/err.h"
-#include "lwip/sockets.h"
 
 #include "driver/i2c.h"
 
-#include "../components/ahrs/MadgwickAHRS.h"
-#include "../components/mpu9250/mpu9250.h"
-#include "../components/mpu9250/calibrate.h"
-#include "../components/mpu9250/common.h"
-#include "../components/wifi/station.h"
-#include "../components/ble/ble.h"
-#include "../components/ble/ble_databee.h"
+#include "MadgwickAHRS.h"
+
+#include "mpu9250.h"
+#include "calibrate.h"
+#include "common.h"
+
+#include "ble.h"
+#include "ble_databee.h"
+#include "gatt_server.h"
 
 static const char *TAG = "main";
-static const char *host_ip = "10.145.234.53";
-static const unsigned short port = 3000;
 
 #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
 
@@ -69,10 +65,7 @@ calibration_t cal = {
   .gyro_bias_offset = {.x = 2.407645, .y = -1.403642, .z = 0.407150}
 };
 
-imu_data_t data;
-
-imu_data_buffer_t *data_buffer;
-int data_buffer_size = 0;
+imu_data_t imu_data;
 
 /**
  * Transformation:
@@ -110,99 +103,46 @@ static void transform_mag(vector_t *v)
 
 void run_imu(void)
 {
-  ESP_LOGI(TAG, "heap space: %d", heap_caps_get_free_size(MALLOC_CAP_8BIT));
-  ESP_LOGI(TAG, "imu data struct space: %d", sizeof(imu_data_t));
-  data_buffer = heap_caps_malloc(sizeof(imu_data_buffer_t), MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
-  data_buffer->start_code = 0x00000000;
-  data_buffer->end_code = 0xFFFFFFFF;
 
   i2c_mpu9250_init(&cal);
   MadgwickAHRS_init(SAMPLE_FREQ_Hz, 0.8);
-
-  // setup tcp socket
-  // struct sockaddr_in dest_addr;
-  // dest_addr.sin_addr.s_addr = inet_addr(host_ip);
-  // dest_addr.sin_family = AF_INET;
-  // dest_addr.sin_port = htons(port);
-
-  // int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  // if (sock < 0) {
-  //     ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-  //     return;
-  // }
-  // ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
-
-  // int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-  // if (err != 0) {
-  //     ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-  //     return;
-  // }
-  // ESP_LOGI(TAG, "Successfully connected. Size of struct is %d bytes", sizeof(imu_data_t));
 
   uint64_t i = 0;
   uint64_t last_time = 0;
   while (true)
   {
     // Get the Accelerometer, Gyroscope and Magnetometer values.
-    ESP_ERROR_CHECK(get_accel_gyro_mag(&data.accel, &data.gyro, &data.magneto));
+    ESP_ERROR_CHECK(get_accel_gyro_mag(&imu_data.accel, &imu_data.gyro, &imu_data.magneto));
 
     // Transform these values to the orientation of our device.
-    transform_accel_gyro(&data.accel);
-    transform_accel_gyro(&data.gyro);
-    transform_mag(&data.magneto);
+    transform_accel_gyro(&imu_data.accel);
+    transform_accel_gyro(&imu_data.gyro);
+    transform_mag(&imu_data.magneto);
 
     // Apply the AHRS algorithm
-    MadgwickAHRS_update(DEG2RAD(data.gyro.x), DEG2RAD(data.gyro.y), DEG2RAD(data.gyro.z),
-                       data.accel.x, data.accel.y, data.accel.z,
-                       data.magneto.x, data.magneto.y, data.magneto.z);
+    MadgwickAHRS_update(DEG2RAD(imu_data.gyro.x), DEG2RAD(imu_data.gyro.y), DEG2RAD(imu_data.gyro.z),
+                       imu_data.accel.x, imu_data.accel.y, imu_data.accel.z,
+                       imu_data.magneto.x, imu_data.magneto.y, imu_data.magneto.z);
 
     struct timeval tv_now;
     gettimeofday(&tv_now, NULL);
-    data.time = (uint64_t)tv_now.tv_sec * 1000000L + (uint64_t)tv_now.tv_usec;
+    imu_data.time = (uint64_t)tv_now.tv_sec * 1000000L + (uint64_t)tv_now.tv_usec;
 
     // Print the data out every 10 items
     if (i++ % 10 == 0)
     {
-      Madgwick_get_euler_angles_degrees(&data.yaw, &data.pitch, &data.roll);
-      ESP_LOGI(TAG, "time diff ms: %f", (data.time - last_time) / 1000.0);
-      ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", data.yaw, data.pitch, data.roll);
+      Madgwick_get_euler_angles_degrees(&imu_data.yaw, &imu_data.pitch, &imu_data.roll);
+      ESP_LOGI(TAG, "time diff ms: %f", (imu_data.time - last_time) / 1000.0);
+      ESP_LOGI(TAG, "heading: %2.3f°, pitch: %2.3f°, roll: %2.3f°", imu_data.yaw, imu_data.pitch, imu_data.roll);
 
-      // add imu data to buffer
-      data_buffer->data[data_buffer_size++] = data;
-
-      // once buffer is full, send data
-      if (data_buffer_size == IMU_DATA_BUFFER_SIZE) {
-        data_buffer_size = 0;
-        int err = send(sock, (char *) data_buffer, sizeof(imu_data_buffer_t), 0);
-        if (err < 0) {
-          ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-
-          // try to reconnect if connection reset
-          if (errno == 104 || errno == 128) {
-            ESP_LOGI(TAG, "Trying to reconnect to socket");
-
-            // try until reconnected
-            err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-            while(err) {
-              close(sock);
-              sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-              while (sock < 0) {
-                close(sock);
-                ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-                sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-              }
-              ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-              err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-            }
-          }
-        }
-      }
+      // update characteristic value
+      update_data_characteristic(imu_data);
 
       // Make the WDT happy
       esp_task_wdt_reset();
     }
 
-    last_time = data.time;
+    last_time = imu_data.time;
     mpu_pause();
   }
 }
@@ -229,14 +169,14 @@ void app_main(void)
 {
   //Initialize NVS
   esp_err_t ret = nvs_flash_init();
-  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+  {
     ESP_ERROR_CHECK(nvs_flash_erase());
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
 
   ble_init_nimble();
-  // wifi_init_sta();
   //start i2c task
   xTaskCreate(imu_task, "imu_task", 4096, NULL, 10, NULL);
 }
